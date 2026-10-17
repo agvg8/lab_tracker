@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LabTracker{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% if current_user %}
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('dashboard') }}">LabTracker</a>
+    <div class="who">
+      <span>{{ current_name }}{% if is_admin %} <span class="badge badge-admin">admin</span>{% endif %}</span>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button class="btn btn-ghost btn-sm" type="submit">Wyloguj</button>
+      </form>
+    </div>
+  </header>
+  {% endif %}
+  <main class="container">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in msgs %}
+        <div class="flash flash-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    // zapamiętanie pozycji przewijania, żeby po odhaczeniu nie skakać na górę
+    var SCROLL_KEY = 'lt-scroll:' + location.pathname;
+    function saveScroll() {
+      try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)); } catch (e) {}
+    }
+    (function restoreScroll() {
+      try {
+        var y = sessionStorage.getItem(SCROLL_KEY);
+        if (y !== null) { sessionStorage.removeItem(SCROLL_KEY); window.scrollTo(0, parseInt(y, 10) || 0); }
+      } catch (e) {}
+    })();
+
+    // potwierdzenia dla formularzy z data-confirm
+    document.addEventListener('submit', function (e) {
+      var form = e.target;
+      var msg = form.getAttribute('data-confirm');
+      if (msg && !window.confirm(msg)) { e.preventDefault(); return; }
+      if (form.classList.contains('keep-scroll')) saveScroll();
+    });
+    // selecty z data-autosubmit wysyłają formularz od razu po zmianie
+    document.addEventListener('change', function (e) {
+      var el = e.target;
+      if (!el.matches || !el.matches('[data-autosubmit]')) return;
+      if (el.form.classList.contains('keep-scroll')) saveScroll();
+      el.form.submit();
+    });
+  </script>
+</body>
+</html>

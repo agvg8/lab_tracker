@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}{{ lab.name }} · LabTracker{% endblock %}
+{% macro uname(key) %}{{ USERS[key].name if key in USERS else key }}{% endmacro %}
+
+{% macro task_row(t, team, lab, edit) %}
+{% set aidx = color(t.assignee) if t.assignee in team else 0 %}
+<li id="t{{ t.id }}" class="task {{ 'is-done' if t.done }} {{ 'is-mine' if t.assignee == current_user }}">
+  {# Odhaczanie zwykłym przyciskiem — działa bez JavaScriptu #}
+  <form method="post" action="{{ url_for('task_toggle', task_id=t.id) }}" class="check keep-scroll"
+        {% if lab.submitted and t.done %}data-confirm="Laborka jest oddana. Odznaczenie tego taska cofnie status „oddane”. Kontynuować?"{% endif %}>
+    <input type="hidden" name="confirm" value="{{ '1' if lab.submitted else '0' }}">
+    {% if edit %}<input type="hidden" name="edit" value="1">{% endif %}
+    <button type="submit" class="tick {{ 'is-on' if t.done }}"
+            aria-label="{{ 'Odznacz' if t.done else 'Oznacz jako zrobione' }}" title="{{ 'Odznacz' if t.done else 'Zrobione' }}">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8" /></svg>
+    </button>
+  </form>
+
+  <div class="task-main">
+    {% if edit and is_admin %}
+    <form method="post" action="{{ url_for('task_edit', task_id=t.id) }}" class="row keep-scroll">
+      <input type="hidden" name="edit" value="1">
+      <input name="text" value="{{ t.text }}" required>
+      <button class="btn btn-sm" type="submit">Zapisz</button>
+    </form>
+    {% else %}
+    <div class="task-text">{{ t.text }}</div>
+    {% endif %}
+    {% if t.done and t.done_by %}
+    <div class="muted small">✓ {{ uname(t.done_by) }}</div>
+    {% endif %}
+  </div>
+
+  <div class="task-side">
+    {% if edit %}
+    <form method="post" action="{{ url_for('task_assign', task_id=t.id) }}" class="assign keep-scroll">
+      <input type="hidden" name="edit" value="1">
+      <select name="assignee" data-autosubmit aria-label="Kto robi"
+              class="{{ 'assignee-u' ~ aidx if aidx else 'assignee-none' }}">
+        <option value="" {{ 'selected' if not aidx }}>— nikt —</option>
+        {% for u in team %}
+        <option value="{{ u }}" {{ 'selected' if t.assignee == u }}>{{ MEMBERS[u].name }}{% if u == current_user %} (ja){% endif %}</option>
+        {% endfor %}
+      </select>
+      <noscript><button class="btn btn-sm" type="submit">OK</button></noscript>
+    </form>
+    {% if is_admin %}
+    <form method="post" action="{{ url_for('task_delete', task_id=t.id) }}" class="keep-scroll" data-confirm="Usunąć ten task?">
+      <input type="hidden" name="edit" value="1">
+      <button class="icon-btn icon-danger" type="submit" aria-label="Usuń task" title="Usuń task">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 6h10M8 6V4h4v2M6.5 6l.7 10h5.6l.7-10" /></svg>
+      </button>
+    </form>
+    {% endif %}
+    {% else %}
+    <span class="chip {{ 'assignee-u' ~ aidx if aidx else 'assignee-none' }}">{{ MEMBERS[t.assignee].name if aidx else '— nikt —' }}</span>
+    {% endif %}
+  </div>
+</li>
+{% endmacro %}
+
+{% block content %}
+{% set team = lab.subject.member_keys() %}
+<a class="back" href="{{ url_for('subject_view', subject_id=lab.subject_id) }}">← {{ lab.subject.name }}</a>
+
+<div class="head-row">
+  <h1>{{ lab.name }} {% if lab.submitted %}<span class="badge badge-done">Oddane</span>{% endif %}</h1>
+  {% if is_admin %}
+  <details class="menu">
+    <summary class="btn btn-ghost btn-sm">Ustawienia laborki</summary>
+    <div class="menu-body">
+      <form method="post" action="{{ url_for('lab_rename', lab_id=lab.id) }}" class="row">
+        <input name="name" value="{{ lab.name }}" required>
+        <button class="btn btn-sm" type="submit">Zapisz</button>
+      </form>
+      <form method="post" action="{{ url_for('lab_delete', lab_id=lab.id) }}"
+            data-confirm="Usunąć laborkę „{{ lab.name }}” razem z taskami?">
+        <button class="btn btn-danger btn-sm" type="submit">Usuń laborkę</button>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+</div>
+
+{% if lab.submitted %}
+<div class="card submitted-banner">
+  <div>
+    <strong>Laborka oddana</strong>
+    <span class="muted">
+      {% if lab.submitted_by %}przez {{ uname(lab.submitted_by) }}{% endif %}
+      {% if lab.submitted_at %}· {{ lab.submitted_at.strftime('%d.%m.%Y %H:%M') }} UTC{% endif %}
+    </span>
+  </div>
+  <form method="post" action="{{ url_for('lab_unsubmit', lab_id=lab.id) }}"
+        data-confirm="Cofnąć oddanie laborki „{{ lab.name }}”? Wróci na listę jako nieoddana.">
+    <button class="btn btn-sm" type="submit">Cofnij oddanie</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Pasek narzędzi: ikonka edycji nad postępem -->
+<div class="toolbar">
+  {% if edit %}
+  <span class="edit-hint">Tryb edycji — wybierz, kto robi który task</span>
+  <a class="icon-btn is-active" href="{{ url_for('lab_view', lab_id=lab.id) }}" aria-label="Zakończ edycję" title="Zakończ edycję">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8" /></svg>
+  </a>
+  {% else %}
+  <a class="icon-btn" href="{{ url_for('lab_view', lab_id=lab.id, edit=1) }}" aria-label="Edytuj przypisania" title="Edytuj — kto co robi">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 3.5l3 3L7 16H4v-3z M11.5 5.5l3 3" /></svg>
+  </a>
+  {% endif %}
+</div>
+
+<!-- Postęp -->
+<div class="card">
+  <div class="bar-label"><strong>Postęp całości</strong><span>{{ stats.done }}/{{ stats.total }} · {{ (stats.done, stats.total)|pct }}%</span></div>
+  <div class="bar bar-big"><span style="width: {{ (stats.done, stats.total)|pct }}%"></span></div>
+  <div class="user-bars">
+    {% for u, p in stats.per_user.items() %}
+    <div class="{{ 'is-me' if u == current_user }}">
+      <div class="bar-label"><span>{{ p.name }}{% if u == current_user %} (Ty){% endif %}</span><span>{{ p.done }}/{{ p.total }} · {{ (p.done, p.total)|pct }}%</span></div>
+      <div class="bar bar-u{{ color(u) }}"><span style="width: {{ (p.done, p.total)|pct }}%"></span></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if stats.unassigned %}
+    {% if edit %}
+    <form method="post" action="{{ url_for('tasks_assign_all', lab_id=lab.id) }}" class="row assign-all">
+      <input type="hidden" name="edit" value="1">
+      <span class="muted">{{ stats.unassigned }} bez przypisania →</span>
+      <select name="assignee">
+        {% for u in team %}<option value="{{ u }}" {{ 'selected' if u == current_user }}>{{ MEMBERS[u].name }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm" type="submit">Przypisz wszystkie</button>
+    </form>
+    {% else %}
+    <p class="muted small assign-all">{{ stats.unassigned }} bez przypisania — kliknij ✎ nad postępem, żeby przypisać.</p>
+    {% endif %}
+  {% endif %}
+
+  {% if stats.all_done and not lab.submitted %}
+  <form method="post" action="{{ url_for('lab_submit', lab_id=lab.id) }}" class="submit-row">
+    <button class="btn btn-success btn-block" type="submit">Oddaj</button>
+  </form>
+  {% endif %}
+</div>
+
+<!-- Taski -->
+<div class="card {{ 'is-editing' if edit }}">
+  <h3>Do zrobienia <span class="muted">({{ open_tasks|length }})</span></h3>
+  {% if open_tasks %}
+  <ul class="tasks">
+    {% for t in open_tasks %}{{ task_row(t, team, lab, edit) }}{% endfor %}
+  </ul>
+  {% elif lab.tasks %}
+  <p class="muted">Wszystko zrobione 🎉</p>
+  {% else %}
+  <p class="muted">Brak tasków{% if is_admin %} — wrzuć plik .txt poniżej{% endif %}.</p>
+  {% endif %}
+
+  {% if done_tasks %}
+  <h3 class="done-head">Zrobione <span class="muted">({{ done_tasks|length }})</span></h3>
+  <ul class="tasks tasks-done">
+    {% for t in done_tasks %}{{ task_row(t, team, lab, edit) }}{% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+{% if is_admin %}
+<div class="card">
+  <h3>Dodaj taski</h3>
+  <form method="post" action="{{ url_for('tasks_add', lab_id=lab.id) }}" enctype="multipart/form-data" class="stack">
+    <label>Plik .txt (jedna linia = jeden task)
+      <input type="file" name="file" accept=".txt,text/plain">
+    </label>
+    <label>…albo wpisz ręcznie
+      <textarea name="text" rows="3" placeholder="Każdy task w nowej linii"></textarea>
+    </label>
+    <button class="btn btn-primary" type="submit">Dodaj</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

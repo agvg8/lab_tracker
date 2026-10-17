@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ subject.name }} · LabTracker{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('dashboard') }}">← Przedmioty</a>
+<div class="head-row">
+  <h1>{{ subject.name }}</h1>
+  {% if is_admin %}
+  <details class="menu">
+    <summary class="btn btn-ghost btn-sm">Edytuj</summary>
+    <div class="menu-body">
+      <form method="post" action="{{ url_for('subject_rename', subject_id=subject.id) }}" class="row">
+        <input name="name" value="{{ subject.name }}" required>
+        <button class="btn btn-sm" type="submit">Zapisz</button>
+      </form>
+      <form method="post" action="{{ url_for('subject_delete', subject_id=subject.id) }}"
+            data-confirm="Usunąć przedmiot „{{ subject.name }}” razem ze wszystkimi laborkami?">
+        <button class="btn btn-danger btn-sm" type="submit">Usuń przedmiot</button>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+</div>
+
+<div class="team team-head">
+  <span class="muted small">Zespół:</span>
+  {% for u in subject.member_keys() %}<span class="chip assignee-u{{ color(u) }}">{{ MEMBERS[u].name }}{% if u == current_user %} (Ty){% endif %}</span>{% endfor %}
+  {% if not subject.member_keys() %}<span class="chip assignee-none">nikt — projekt widzi tylko admin</span>{% endif %}
+</div>
+
+{% if is_admin %}
+<details class="card members-card">
+  <summary><strong>Osoby w projekcie</strong> <span class="muted small">— kto widzi ten przedmiot i ma pasek postępu</span></summary>
+  <form method="post" action="{{ url_for('subject_members', subject_id=subject.id) }}" class="stack">
+    <fieldset class="members-pick">
+      {% for u, info in MEMBERS.items() %}
+      <label class="check-label"><input type="checkbox" name="members" value="{{ u }}" {{ 'checked' if u in subject.member_keys() }}> {{ info.name }}</label>
+      {% endfor %}
+    </fieldset>
+    <button class="btn btn-primary btn-sm" type="submit">Zapisz skład</button>
+  </form>
+</details>
+{% endif %}
+
+{% if labs %}
+<div class="lab-list">
+  {% for lab, s in labs %}
+  <a class="card card-link lab-card {{ 'is-submitted' if lab.submitted }}" href="{{ url_for('lab_view', lab_id=lab.id) }}">
+    <div class="lab-card-head">
+      <h2>{{ lab.name }}</h2>
+      {% if lab.submitted %}
+        <span class="badge badge-done">Oddane</span>
+      {% elif s.all_done %}
+        <span class="badge badge-ready">Gotowe do oddania</span>
+      {% endif %}
+    </div>
+    <div class="bar-label"><span>Całość</span><span>{{ s.done }}/{{ s.total }} · {{ (s.done, s.total)|pct }}%</span></div>
+    <div class="bar"><span style="width: {{ (s.done, s.total)|pct }}%"></span></div>
+    <div class="mini-bars">
+      {% for u, p in s.per_user.items() %}
+      <div>
+        <div class="bar-label small"><span>{{ p.name }}</span><span>{{ p.done }}/{{ p.total }}</span></div>
+        <div class="bar bar-thin bar-u{{ color(u) }}"><span style="width: {{ (p.done, p.total)|pct }}%"></span></div>
+      </div>
+      {% endfor %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">Brak laborek w tym przedmiocie.</p>
+{% endif %}
+
+{% if is_admin %}
+<div class="card">
+  <h3>Dodaj laborkę</h3>
+  <form method="post" action="{{ url_for('lab_create', subject_id=subject.id) }}" enctype="multipart/form-data" class="stack">
+    <label>Nazwa
+      <input name="name" placeholder="np. Lab 3 — Docker" required>
+    </label>
+    <label>Plik .txt z taskami (jedna linia = jeden task)
+      <input type="file" name="file" accept=".txt,text/plain">
+    </label>
+    <details>
+      <summary class="muted">…albo wklej taski ręcznie</summary>
+      <textarea name="text" rows="5" placeholder="Zainstaluj Dockera&#10;Napisz Dockerfile&#10;Zbuduj obraz"></textarea>
+    </details>
+    <button class="btn btn-primary" type="submit">Dodaj laborkę</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

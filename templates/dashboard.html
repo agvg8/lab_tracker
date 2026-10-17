@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Przedmioty · LabTracker{% endblock %}
+{% block content %}
+<h1>Przedmioty</h1>
+
+{% if rows %}
+<div class="grid">
+  {% for r in rows %}
+  <a class="card card-link" href="{{ url_for('subject_view', subject_id=r.subject.id) }}">
+    <h2>{{ r.subject.name }}</h2>
+    <p class="muted">
+      {{ r.labs }} {{ 'laborka' if r.labs == 1 else 'laborek' }}
+      · {{ r.open }} w toku · {{ r.submitted }} oddanych
+    </p>
+    <div class="bar"><span style="width: {{ (r.submitted, r.labs)|pct }}%"></span></div>
+    <div class="team">
+      {% for u in r.team %}<span class="chip assignee-u{{ color(u) }}">{{ MEMBERS[u].name }}</span>{% endfor %}
+      {% if not r.team %}<span class="chip assignee-none">brak osób — nikt nie widzi</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">Brak przedmiotów{% if is_admin %} — dodaj pierwszy poniżej{% else %} — admin nie przypisał Cię jeszcze do żadnego projektu{% endif %}.</p>
+{% endif %}
+
+{% if is_admin %}
+<div class="card">
+  <h3>Dodaj przedmiot</h3>
+  <form method="post" action="{{ url_for('subject_create') }}" class="stack">
+    <input name="name" placeholder="np. Wstęp do MLOps" required>
+    <fieldset class="members-pick">
+      <legend class="muted">Osoby w projekcie</legend>
+      {% for u, info in MEMBERS.items() %}
+      <label class="check-label"><input type="checkbox" name="members" value="{{ u }}" checked> {{ info.name }}</label>
+      {% endfor %}
+    </fieldset>
+    <button class="btn btn-primary" type="submit">Dodaj</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
